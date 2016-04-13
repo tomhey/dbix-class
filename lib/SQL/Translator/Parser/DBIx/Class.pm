@@ -150,13 +150,14 @@ sub parse {
 
         $table->primary_key(@primary) if @primary;
 
-        my %unique_constraints = $source->unique_constraints;
-        foreach my $uniq (sort keys %unique_constraints) {
-            if (!$source->_compare_relationship_keys($unique_constraints{$uniq}, \@primary)) {
+        my %unique_constraints_info = $source->unique_constraints_info;
+        foreach my $uniq (sort keys %unique_constraints_info) {
+            if (!$source->_compare_relationship_keys($unique_constraints_info{$uniq}->{cols}, \@primary)) {
                 $table->add_constraint(
                             type             => 'unique',
                             name             => $uniq,
-                            fields           => $unique_constraints{$uniq}
+                            fields           => $unique_constraints_info{$uniq}->{cols},
+                            extra            => $unique_constraints_info{$uniq}->{extra},
                 );
             }
         }
@@ -276,6 +277,7 @@ sub parse {
                     on_delete        => uc ($cascade->{delete} || ''),
                     on_update        => uc ($cascade->{update} || ''),
                     (defined $is_deferrable ? ( deferrable => $is_deferrable ) : ()),
+                    extra            => $rel_info->{attrs}{extra} || {},
                   );
 
                   # global parser_args add_fk_index param can be overridden on the rel def
@@ -295,6 +297,7 @@ sub parse {
                           name   => join('_', $table_abbrev, 'idx', @keys),
                           fields => \@keys,
                           type   => 'NORMAL',
+                          extra  => $rel_info->{attrs}{index_extra} || {},
                       );
                   }
               }

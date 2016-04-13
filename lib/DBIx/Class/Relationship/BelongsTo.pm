@@ -95,7 +95,8 @@ sub belongs_to {
       is_depends_on => 1,
       accessor => $acc_type,
       $fk_columns ? ( fk_columns => $fk_columns ) : (),
-      %{$attrs || {}}
+      %{$attrs || {}},
+      extra => $attrs->{extra} || {},
     }
   );
 

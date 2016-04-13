@@ -18,7 +18,7 @@ use namespace::clean;
 
 __PACKAGE__->mk_group_accessors(simple => qw/
   source_name name source_info
-  _ordered_columns _columns _primaries _unique_constraints
+  _ordered_columns _columns _primaries _unique_constraints _unique_constraints_info
   _relationships resultset_attributes
   column_info_from_storage
 /);
@@ -605,7 +605,26 @@ for more info.
 =cut
 
 sub set_primary_key {
-  my ($self, @cols) = @_;
+
+  my $self = shift;
+  my $first_arg = shift;
+  my @cols;
+  my $extra;
+
+  if ( ref $first_arg eq 'HASH') {
+
+    if ( ref $first_arg->{cols} eq 'ARRAY' ) {
+      @cols = @{$first_arg->{cols}};
+    } else {
+      push @cols, $first_arg->{cols};
+    }
+    $extra = $first_arg->{extra};
+
+  } else {
+
+    @cols = ($first_arg, @_);
+    $extra = {};
+  }
 
   my $colinfo = $self->columns_info(\@cols);
   for my $col (@cols) {
@@ -620,7 +639,10 @@ sub set_primary_key {
 
   $self->_primaries(\@cols);
 
-  $self->add_unique_constraint(primary => \@cols);
+  $self->add_unique_constraint('primary',
+	                       { cols => \@cols,
+			         extra => $extra },
+  );
 }
 
 =head2 primary_columns
@@ -742,13 +764,26 @@ sub add_unique_constraint {
     );
   }
 
-  my $cols = pop @_;
-  if (ref $cols ne 'ARRAY') {
+  my $constraint = pop @_;
+  my $cols;
+  my $extra = {};
+
+  if (ref $constraint eq 'HASH') {
+
+    $cols = $constraint->{cols} || $self->throw_exception ( 'Missing cols key' );
+    $extra = $constraint->{extra} || {};
+
+  } elsif (ref $constraint ne 'ARRAY') {
+
     $self->throw_exception (
-      'Expecting an arrayref of constraint columns, got ' . ($cols||'NOTHING')
+      'Expecting an arrayref of constraint columns, got ' . ($constraint||'NOTHING')
     );
+  } else {
+
+    $cols = $constraint;
   }
 
+  
   my $name = shift @_;
 
   $name ||= $self->name_unique_constraint($cols);
@@ -761,6 +796,14 @@ sub add_unique_constraint {
   my %unique_constraints = $self->unique_constraints;
   $unique_constraints{$name} = $cols;
   $self->_unique_constraints(\%unique_constraints);
+
+  my %unique_constraints_info = $self->unique_constraints_info;
+  $unique_constraints_info{$name} = {
+    name => $name,
+    cols => $cols,
+    extra => $extra,
+  };
+  $self->_unique_constraints_info(\%unique_constraints_info);
 }
 
 =head2 add_unique_constraints
@@ -874,6 +917,10 @@ column names as values.
 
 sub unique_constraints {
   return %{shift->_unique_constraints||{}};
+}
+
+sub unique_constraints_info {
+  return %{shift->_unique_constraints_info||{}};
 }
 
 =head2 unique_constraint_names
